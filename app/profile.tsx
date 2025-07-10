@@ -1,17 +1,19 @@
+import { MaterialIcons } from '@expo/vector-icons';
 import { Camera } from 'expo-camera';
 import * as ImagePicker from 'expo-image-picker';
+import { router } from 'expo-router';
 import React, { useEffect, useRef, useState } from 'react';
-import { ActivityIndicator, Image, ScrollView, StyleSheet, Text, TextInput, TouchableOpacity, View } from 'react-native';
+import { ActivityIndicator, Image, Modal, Platform, Pressable, ScrollView, StyleSheet, Text, TextInput, TouchableOpacity, View } from 'react-native';
+import Webcam from 'react-webcam';
 import { STORAGE_KEYS } from '../utils/storageKeys';
 import { useAsyncStorage } from '../utils/useAsyncStorage';
 
 const defaultProfile = {
     name: '',
     email: '',
-    avatar: null as string | null, // uri string or null
+    avatar: null as string | null,
     phone: '',
     address: '',
-    // Add more fields as needed
 };
 
 const Profile = () => {
@@ -20,9 +22,9 @@ const Profile = () => {
     const [profile, setProfile] = useState<typeof defaultProfile>(defaultProfile);
     const [editing, setEditing] = useState(false);
     const [loading, setLoading] = useState(true);
-    const [cameraPermission, setCameraPermission] = useState(false);
-    const [showCamera, setShowCamera] = useState(false);
-    const cameraRef = useRef(null);
+    const [imagePickerVisible, setImagePickerVisible] = useState(false);
+    const [webcamVisible, setWebcamVisible] = useState(false);
+    const webcamRef = useRef<any>(null);
 
     useEffect(() => {
         (async () => {
@@ -41,9 +43,7 @@ const Profile = () => {
         setLoading(true);
         setEditing(false);
         setProfile((prev) => ({ ...prev }));
-        // Update session
         await sessionStorage.setData(profile);
-        // Update user in users list
         const users = (await usersStorage.getData()) || [];
         const idx = users.findIndex((u: { email: string }) => u.email === profile.email);
         if (idx !== -1) {
@@ -55,27 +55,57 @@ const Profile = () => {
 
     const handleLogout = async () => {
         await sessionStorage.deleteData();
-        // Add navigation to login if needed
-        alert('Logged out!');
+        router.replace('/login');
     };
 
-    const handlePickImage = async () => {
-        // Ask for camera permission
+    const pickFromCamera = async () => {
+        if (Platform.OS === 'web') {
+            setWebcamVisible(true);
+            return;
+        }
         const { status } = await Camera.requestCameraPermissionsAsync();
-        setCameraPermission(status === 'granted' ? true : false);
         if (status !== 'granted') {
             alert('Camera permission is required!');
             return;
         }
-        // Launch camera
         let result = await ImagePicker.launchCameraAsync({
             mediaTypes: ImagePicker.MediaTypeOptions.Images,
             allowsEditing: true,
             aspect: [1, 1],
             quality: 0.7,
+            base64: true,
         });
-        if (!result.canceled && result.assets && result.assets[0].uri) {
-            setProfile((prev) => ({ ...prev, avatar: result.assets[0].uri as string }));
+        if (!result.canceled && result.assets && result.assets[0].base64) {
+            setProfile((prev) => ({
+                ...prev,
+                avatar: `data:image/jpeg;base64,${result.assets[0].base64}`,
+            }));
+        }
+    };
+
+    const pickFromGallery = async () => {
+        let result = await ImagePicker.launchImageLibraryAsync({
+            mediaTypes: ImagePicker.MediaTypeOptions.Images,
+            allowsEditing: true,
+            aspect: [1, 1],
+            quality: 0.7,
+            base64: true,
+        });
+        if (!result.canceled && result.assets && result.assets[0].base64) {
+            setProfile((prev) => ({
+                ...prev,
+                avatar: `data:image/jpeg;base64,${result.assets[0].base64}`,
+            }));
+        }
+    };
+
+    const handleWebcamCapture = () => {
+        if (webcamRef.current) {
+            const imageSrc = webcamRef.current.getScreenshot();
+            if (imageSrc) {
+                setProfile((prev) => ({ ...prev, avatar: imageSrc }));
+            }
+            setWebcamVisible(false);
         }
     };
 
@@ -87,13 +117,66 @@ const Profile = () => {
 
     return (
         <ScrollView contentContainerStyle={styles.container}>
-            <TouchableOpacity onPress={editing ? handlePickImage : undefined}>
+            <TouchableOpacity onPress={editing ? () => setImagePickerVisible(true) : undefined}>
                 <Image
                     source={profile.avatar ? { uri: profile.avatar } : require('../assets/images/icon.png')}
                     style={styles.avatar}
                 />
                 {editing && <Text style={styles.editAvatarText}>Edit Photo</Text>}
             </TouchableOpacity>
+            <Modal
+                visible={imagePickerVisible}
+                transparent
+                animationType="fade"
+                onRequestClose={() => setImagePickerVisible(false)}
+            >
+                <Pressable style={{ flex: 1, backgroundColor: 'rgba(0,0,0,0.3)' }} onPress={() => setImagePickerVisible(false)}>
+                    <View style={{ position: 'absolute', top: '40%', left: '10%', right: '10%', backgroundColor: '#fff', borderRadius: 10, padding: 24, alignItems: 'center' }}>
+                        <Text style={{ fontSize: 18, fontWeight: 'bold', marginBottom: 16 }}>Change Profile Photo</Text>
+                        <View style={styles.photoButtonRow}>
+                            <TouchableOpacity style={styles.photoButton} onPress={() => { setImagePickerVisible(false); pickFromCamera(); }}>
+                                <MaterialIcons name="photo-camera" size={36} color="#fff" />
+                                <Text style={styles.photoButtonText}>Camera</Text>
+                            </TouchableOpacity>
+                            <TouchableOpacity style={styles.photoButton} onPress={() => { setImagePickerVisible(false); pickFromGallery(); }}>
+                                <MaterialIcons name="photo-library" size={36} color="#fff" />
+                                <Text style={styles.photoButtonText}>Gallery</Text>
+                            </TouchableOpacity>
+                        </View>
+                        <TouchableOpacity onPress={() => setImagePickerVisible(false)} style={{ marginTop: 12 }}>
+                            <Text style={{ fontSize: 16, color: '#e74c3c' }}>Cancel</Text>
+                        </TouchableOpacity>
+                    </View>
+                </Pressable>
+            </Modal>
+            {Platform.OS === 'web' && (
+                <Modal
+                    visible={webcamVisible}
+                    transparent
+                    animationType="fade"
+                    onRequestClose={() => setWebcamVisible(false)}
+                >
+                    <Pressable style={{ flex: 1, backgroundColor: 'rgba(0,0,0,0.3)' }} onPress={() => setWebcamVisible(false)}>
+                        <View style={{ position: 'absolute', top: '30%', left: '10%', right: '10%', backgroundColor: '#fff', borderRadius: 10, padding: 24, alignItems: 'center' }}>
+                            <Text style={{ fontSize: 18, fontWeight: 'bold', marginBottom: 16 }}>Webcam Capture</Text>
+                            <Webcam
+                                audio={false}
+                                ref={webcamRef}
+                                screenshotFormat="image/jpeg"
+                                width={240}
+                                height={180}
+                                style={{ borderRadius: 8, marginBottom: 16 }}
+                            />
+                            <TouchableOpacity style={{ marginBottom: 8 }} onPress={handleWebcamCapture}>
+                                <Text style={{ fontSize: 16, color: '#1565c0' }}>Capture</Text>
+                            </TouchableOpacity>
+                            <TouchableOpacity onPress={() => setWebcamVisible(false)}>
+                                <Text style={{ fontSize: 16, color: '#e74c3c' }}>Cancel</Text>
+                            </TouchableOpacity>
+                        </View>
+                    </Pressable>
+                </Modal>
+            )}
             {editing ? (
                 <>
                     <TextInput
@@ -120,7 +203,6 @@ const Profile = () => {
                         placeholder="Address"
                         onChangeText={(text) => setProfile((prev) => ({ ...prev, address: text }))}
                     />
-                    {/* Add more editable fields here */}
                     <TouchableOpacity style={styles.saveButton} onPress={handleSave}>
                         <Text style={styles.saveText}>Save</Text>
                     </TouchableOpacity>
@@ -131,7 +213,6 @@ const Profile = () => {
                     <Text style={styles.email}>{profile.email}</Text>
                     {profile.phone ? <Text style={styles.detail}>Phone: {profile.phone}</Text> : null}
                     {profile.address ? <Text style={styles.detail}>Address: {profile.address}</Text> : null}
-                    {/* Show more fields here */}
                     <TouchableOpacity style={styles.editButton} onPress={() => setEditing(true)}>
                         <Text style={styles.editText}>Edit Profile</Text>
                     </TouchableOpacity>
@@ -140,6 +221,28 @@ const Profile = () => {
             <TouchableOpacity style={styles.logoutButton} onPress={handleLogout}>
                 <Text style={styles.logoutText}>Logout</Text>
             </TouchableOpacity>
+            {Platform.OS === 'web' && (
+                <input
+                    id="webcamInput"
+                    type="file"
+                    accept="image/*"
+                    capture="environment"
+                    style={{ display: 'none' }}
+                    onChange={async (e) => {
+                        const file = e.target?.files?.[0];
+                        if (file) {
+                            const reader = new FileReader();
+                            reader.onloadend = () => {
+                                setProfile((prev) => ({
+                                    ...prev,
+                                    avatar: reader.result as string,
+                                }));
+                            };
+                            reader.readAsDataURL(file);
+                        }
+                    }}
+                />
+            )}
         </ScrollView>
     );
 };
@@ -232,6 +335,9 @@ const styles = StyleSheet.create({
         fontSize: 16,
         fontWeight: 'bold',
     },
+    photoButtonRow: { flexDirection: 'row', justifyContent: 'center', marginBottom: 16, gap: 16 },
+    photoButton: { alignItems: 'center', backgroundColor: '#1565c0', borderRadius: 12, padding: 16, marginHorizontal: 8, flex: 1 },
+    photoButtonText: { color: '#fff', fontWeight: 'bold', marginTop: 8, fontSize: 16 },
 });
 
 export default Profile;
