@@ -1,9 +1,10 @@
 import { useRouter } from 'expo-router';
 import React, { useState } from 'react';
 import { StyleSheet, Text, TextInput, TouchableOpacity, View } from 'react-native';
+import { signin } from '../features/session/session.slice';
+import { addUser } from '../features/users/users.slice';
+import { useAppDispatch, useAppSelector } from '../store/hooks';
 import { showAlert } from '../utils/alertHelper';
-import { STORAGE_KEYS } from '../utils/storageKeys';
-import { useAsyncStorage } from '../utils/useAsyncStorage';
 
 export default function SignupScreen() {
     const [name, setName] = useState('');
@@ -11,7 +12,8 @@ export default function SignupScreen() {
     const [password, setPassword] = useState('');
     const router = useRouter();
 
-    const usersStorage = useAsyncStorage<any[]>(STORAGE_KEYS.USERS);
+    const dispatch = useAppDispatch();
+    const users = useAppSelector(state => state.users);
 
     const handleSignup = async () => {
         if (!name || !email || !password) {
@@ -19,14 +21,13 @@ export default function SignupScreen() {
             return;
         }
         try {
-            const users = await usersStorage.getData() || [];
             if (users.some((u: any) => u.email === email)) {
                 showAlert({ title: 'Error', message: 'Email already exists. Please use a different email.' });
                 return;
             }
             const user = { name, email, password };
-            users.push(user);
-            await usersStorage.setData(users);
+            dispatch(addUser(user));
+            dispatch(signin(user));
             showAlert({ title: 'Success', message: 'Signup successful!' });
             router.replace('/login');
         } catch (e) {

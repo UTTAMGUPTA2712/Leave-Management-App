@@ -1,39 +1,26 @@
-import React, { useEffect, useState } from 'react';
-import { ScrollView, StyleSheet, Text, View } from 'react-native';
-import { STORAGE_KEYS } from '../utils/storageKeys';
-import { useAsyncStorage } from '../utils/useAsyncStorage';
+import React, { useCallback } from 'react';
+import { ScrollView, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
+import { resetLeaveSummary } from '../features/leaveSummary/leaveSummary.slice';
+import { resetRecentRequests } from '../features/recentRequests/recentRequests.slice';
+import { useAppDispatch, useAppSelector } from '../store/hooks';
 
-const defaultLeaveSummary = {
-    total: 30,
-    taken: 12,
-    remaining: 18,
-};
+const Dashboard: React.FC = React.memo(() => {
+    const dispatch = useAppDispatch();
+    const leaveSummary = useAppSelector(state => state.leaveSummary);
+    const recentRequests = useAppSelector(state => state.recentRequests);
 
-const defaultRecentRequests = [
-    { id: 1, date: '2024-06-01', type: 'Sick Leave', status: 'Approved' },
-    { id: 2, date: '2024-06-10', type: 'Casual Leave', status: 'Pending' },
-    { id: 3, date: '2024-06-15', type: 'Earned Leave', status: 'Rejected' },
-];
-
-const Dashboard: React.FC = () => {
-    const [leaveSummary, setLeaveSummary] = useState(defaultLeaveSummary);
-    const [recentRequests, setRecentRequests] = useState(defaultRecentRequests);
-
-    const leaveSummaryStorage = useAsyncStorage<typeof defaultLeaveSummary>(STORAGE_KEYS.LEAVE_SUMMARY);
-    const recentRequestsStorage = useAsyncStorage<typeof defaultRecentRequests>(STORAGE_KEYS.RECENT_REQUESTS);
-
-    useEffect(() => {
-        leaveSummaryStorage.getData().then((data) => {
-            if (data) setLeaveSummary(data);
-        });
-        recentRequestsStorage.getData().then((data) => {
-            if (data) setRecentRequests(data);
-        });
-    }, []);
+    // Example: Delete all data
+    const deleteAllData = useCallback(async () => {
+        dispatch(resetLeaveSummary());
+        dispatch(resetRecentRequests());
+    }, [dispatch]);
 
     return (
         <ScrollView contentContainerStyle={styles.container}>
             <Text style={styles.title}>Welcome to Your Dashboard</Text>
+            <TouchableOpacity style={styles.resetButton} onPress={deleteAllData}>
+                <Text style={styles.resetButtonText}>Reset Data</Text>
+            </TouchableOpacity>
             <View style={styles.section}>
                 <Text style={styles.sectionTitle}>Leave Summary</Text>
                 <View style={styles.summaryList}>
@@ -59,7 +46,7 @@ const Dashboard: React.FC = () => {
             </View>
         </ScrollView>
     );
-};
+});
 
 const styles = StyleSheet.create({
     container: {
@@ -89,63 +76,51 @@ const styles = StyleSheet.create({
     },
     section: {
         width: '100%',
-        marginBottom: 32,
-        display: 'flex',
-        flexDirection: 'column',
-        alignItems: 'center',
-        justifyContent: 'center',
+        marginBottom: 24,
     },
     sectionTitle: {
-        fontSize: 22,
+        fontSize: 20,
         fontWeight: 'bold',
-        marginBottom: 12,
-        color: '#007AFF',
+        marginBottom: 8,
+        color: '#333',
     },
     summaryList: {
-        width: '90%',
         backgroundColor: '#f7f7f7',
         borderRadius: 10,
         padding: 16,
-        marginBottom: 8,
+        marginBottom: 16,
     },
     summaryItem: {
         fontSize: 16,
-        marginBottom: 6,
+        marginBottom: 4,
         color: '#444',
     },
     summaryValue: {
         fontWeight: 'bold',
-        color: '#222',
+        color: '#1565c0',
     },
     tableHeader: {
         flexDirection: 'row',
-        backgroundColor: '#c9ada7',
-        borderTopLeftRadius: 8,
-        borderTopRightRadius: 8,
-        paddingVertical: 8,
-        paddingHorizontal: 4,
+        backgroundColor: '#e0e0e0',
+        borderRadius: 6,
+        padding: 8,
+        marginBottom: 4,
     },
     headerCell: {
         fontWeight: 'bold',
-        color: '#fff',
+        color: '#333',
     },
     tableRow: {
         flexDirection: 'row',
         backgroundColor: '#f7f7f7',
-        borderBottomWidth: 1,
-        borderBottomColor: '#e0e0e0',
-        paddingVertical: 8,
-        paddingHorizontal: 4,
-        alignItems: 'center',
-        justifyContent: 'center',
+        borderRadius: 6,
+        padding: 8,
+        marginBottom: 2,
     },
     tableCell: {
         flex: 1,
         fontSize: 15,
         color: '#444',
-        textAlign: 'center',
-        alignItems: 'center',
-        justifyContent: 'center',
     },
 });
 

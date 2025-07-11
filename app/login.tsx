@@ -1,17 +1,20 @@
 import { useRouter } from 'expo-router';
 import { useState } from 'react';
 import { Image, StyleSheet, Text, TextInput, TouchableOpacity, View } from 'react-native';
+import { signin } from '../features/session/session.slice';
+import { useAppDispatch, useAppSelector } from '../store/hooks';
 import { showAlert } from '../utils/alertHelper';
-import { STORAGE_KEYS } from '../utils/storageKeys';
-import { useAsyncStorage } from '../utils/useAsyncStorage';
 
 export default function LoginScreen() {
     const [email, setEmail] = useState('');
     const [password, setPassword] = useState('');
     const router = useRouter();
 
-    const usersStorage = useAsyncStorage<any[]>(STORAGE_KEYS.USERS);
-    const sessionStorage = useAsyncStorage<any>(STORAGE_KEYS.SESSION);
+    const dispatch = useAppDispatch();
+    const users = useAppSelector(state => state.users);
+
+    // Optionally, load users from a static source if not present
+    // useEffect(() => { if (!users.length) dispatch(setUsers(defaultUsers)); }, []);
 
     const handleLogin = async () => {
         if (!email || !password) {
@@ -19,16 +22,15 @@ export default function LoginScreen() {
             return;
         }
         try {
-            const users = await usersStorage.getData() || [];
             const user = users.find((u: any) => u.email === email && u.password === password);
             if (user) {
-                await sessionStorage.setData(user);
+                dispatch(signin(user));
                 router.replace('/dashboard');
             } else {
                 showAlert({ title: 'Error', message: 'Invalid credentials' });
             }
         } catch (e) {
-            showAlert({ title: 'Error', message: 'Could not log in. Please try again.' });
+            showAlert({ title: 'Error', message: 'Login failed. Please try again.' });
         }
     };
 

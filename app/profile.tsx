@@ -2,65 +2,55 @@ import { MaterialIcons } from '@expo/vector-icons';
 import { Camera } from 'expo-camera';
 import * as ImagePicker from 'expo-image-picker';
 import { router } from 'expo-router';
-import React, { useEffect, useRef, useState } from 'react';
+import React, { useCallback, useMemo, useRef, useState } from 'react';
 import { ActivityIndicator, Image, Modal, Platform, Pressable, ScrollView, StyleSheet, Text, TextInput, TouchableOpacity, View } from 'react-native';
 import Webcam from 'react-webcam';
-import { STORAGE_KEYS } from '../utils/storageKeys';
-import { useAsyncStorage } from '../utils/useAsyncStorage';
+import { signin, signout } from '../features/session/session.slice';
+import { updateUser } from '../features/users/users.slice';
+import { useAppDispatch, useCurrentUser, useUsersList } from '../store/hooks';
 
-const defaultProfile = {
-    name: '',
-    email: '',
-    avatar: null as string | null,
-    phone: '',
-    address: '',
-};
-
-const Profile = () => {
-    const sessionStorage = useAsyncStorage(STORAGE_KEYS.SESSION);
-    const usersStorage = useAsyncStorage(STORAGE_KEYS.USERS);
-    const [profile, setProfile] = useState<typeof defaultProfile>(defaultProfile);
+const Profile = React.memo(() => {
+    const dispatch = useAppDispatch();
+    const currentUser = useCurrentUser();
+    const users = useUsersList();
     const [editing, setEditing] = useState(false);
-    const [loading, setLoading] = useState(true);
     const [imagePickerVisible, setImagePickerVisible] = useState(false);
     const [webcamVisible, setWebcamVisible] = useState(false);
     const webcamRef = useRef<any>(null);
+    const [loading, setLoading] = useState(false);
 
-    useEffect(() => {
-        (async () => {
-            const session = await sessionStorage.getData();
-            if (session) {
-                setProfile({
-                    ...defaultProfile,
-                    ...session,
-                });
-            }
-            setLoading(false);
-        })();
-    }, []);
+    if (!currentUser) {
+        return (
+            <View style={styles.centered}><ActivityIndicator size="large" /></View>
+        );
+    }
 
-    const handleSave = async () => {
+    const [profile, setProfile] = useState(currentUser);
+
+    // Keep local profile state in sync with Redux user when editing starts
+    React.useEffect(() => {
+        if (editing) setProfile(currentUser!);
+    }, [editing, currentUser]);
+
+    const handleSave = useCallback(() => {
         setLoading(true);
         setEditing(false);
-        setProfile((prev) => ({ ...prev }));
-        await sessionStorage.setData(profile);
-        const users = (await usersStorage.getData()) || [];
+        dispatch(signin(profile));
+        // Update user in users list
         const idx = users.findIndex((u: { email: string }) => u.email === profile.email);
         if (idx !== -1) {
-            users[idx] = { ...users[idx], ...profile };
-            await usersStorage.setData(users);
+            dispatch(updateUser(profile));
         }
         setLoading(false);
-    };
+    }, [dispatch, profile, users]);
 
-    const handleLogout = async () => {
-        await sessionStorage.deleteData();
+    const handleLogout = useCallback(() => {
+        dispatch(signout());
         router.replace('/login');
-    };
+    }, [dispatch]);
 
-    const pickFromCamera = async () => {
+    const pickFromCamera = useCallback(async () => {
         if (Platform.OS === 'web') {
-            setWebcamVisible(true);
             return;
         }
         const { status } = await Camera.requestCameraPermissionsAsync();
@@ -72,7 +62,7 @@ const Profile = () => {
             mediaTypes: ImagePicker.MediaTypeOptions.Images,
             allowsEditing: true,
             aspect: [1, 1],
-            quality: 0.7,
+            quality: 0.5, // Reduced quality for better performance
             base64: true,
         });
         if (!result.canceled && result.assets && result.assets[0].base64) {
@@ -81,14 +71,14 @@ const Profile = () => {
                 avatar: `data:image/jpeg;base64,${result.assets[0].base64}`,
             }));
         }
-    };
+    }, []);
 
-    const pickFromGallery = async () => {
+    const pickFromGallery = useCallback(async () => {
         let result = await ImagePicker.launchImageLibraryAsync({
             mediaTypes: ImagePicker.MediaTypeOptions.Images,
             allowsEditing: true,
             aspect: [1, 1],
-            quality: 0.7,
+            quality: 0.5, // Reduced quality for better performance
             base64: true,
         });
         if (!result.canceled && result.assets && result.assets[0].base64) {
@@ -97,29 +87,78 @@ const Profile = () => {
                 avatar: `data:image/jpeg;base64,${result.assets[0].base64}`,
             }));
         }
-    };
+    }, []);
 
-    const handleWebcamCapture = () => {
+    const handleWebcamCapture = useCallback(() => {
         if (webcamRef.current) {
             const imageSrc = webcamRef.current.getScreenshot();
             if (imageSrc) {
                 setProfile((prev) => ({ ...prev, avatar: imageSrc }));
+                setWebcamVisible(false);
             }
-            setWebcamVisible(false);
         }
-    };
+    }, []);
 
-    if (loading) {
-        return (
-            <View style={styles.centered}><ActivityIndicator size="large" /></View>
-        );
-    }
+    const handleNameChange = useCallback((text: string) => {
+        setProfile((prev) => ({ ...prev, name: text }));
+    }, []);
+
+    const handlePhoneChange = useCallback((text: string) => {
+        setProfile((prev) => ({ ...prev, phone: text }));
+    }, []);
+
+    const handleAddressChange = useCallback((text: string) => {
+        setProfile((prev) => ({ ...prev, address: text }));
+    }, []);
+
+    const handleEditPress = useCallback(() => {
+        setEditing(true);
+    }, []);
+
+    const handleImagePickerPress = useCallback(() => {
+        if (editing) setImagePickerVisible(true);
+    }, [editing]);
+
+    const handleImagePickerClose = useCallback(() => {
+        setImagePickerVisible(false);
+    }, []);
+
+    const handleWebcamClose = useCallback(() => {
+        setWebcamVisible(false);
+    }, []);
+
+    const handleCameraPress = useCallback(() => {
+        setImagePickerVisible(false);
+        pickFromCamera();
+    }, [pickFromCamera]);
+
+    const handleGalleryPress = useCallback(() => {
+        setImagePickerVisible(false);
+        pickFromGallery();
+    }, [pickFromGallery]);
+
+    const handleCancelPress = useCallback(() => {
+        setImagePickerVisible(false);
+    }, []);
+
+    const handleWebcamCancelPress = useCallback(() => {
+        setWebcamVisible(false);
+    }, []);
+
+    const handleCapturePress = useCallback(() => {
+        handleWebcamCapture();
+    }, [handleWebcamCapture]);
+
+    // Memoize the avatar source to prevent unnecessary re-renders
+    const avatarSource = useMemo(() => {
+        return profile.avatar ? { uri: profile.avatar } : require('../assets/images/icon.png');
+    }, [profile.avatar]);
 
     return (
         <ScrollView contentContainerStyle={styles.container}>
-            <TouchableOpacity onPress={editing ? () => setImagePickerVisible(true) : undefined}>
+            <TouchableOpacity onPress={handleImagePickerPress}>
                 <Image
-                    source={profile.avatar ? { uri: profile.avatar } : require('../assets/images/icon.png')}
+                    source={avatarSource}
                     style={styles.avatar}
                 />
                 {editing && <Text style={styles.editAvatarText}>Edit Photo</Text>}
@@ -128,22 +167,22 @@ const Profile = () => {
                 visible={imagePickerVisible}
                 transparent
                 animationType="fade"
-                onRequestClose={() => setImagePickerVisible(false)}
+                onRequestClose={handleImagePickerClose}
             >
-                <Pressable style={{ flex: 1, backgroundColor: 'rgba(0,0,0,0.3)' }} onPress={() => setImagePickerVisible(false)}>
+                <Pressable style={{ flex: 1, backgroundColor: 'rgba(0,0,0,0.3)' }} onPress={handleImagePickerClose}>
                     <View style={{ position: 'absolute', top: '40%', left: '10%', right: '10%', backgroundColor: '#fff', borderRadius: 10, padding: 24, alignItems: 'center' }}>
                         <Text style={{ fontSize: 18, fontWeight: 'bold', marginBottom: 16 }}>Change Profile Photo</Text>
                         <View style={styles.photoButtonRow}>
-                            <TouchableOpacity style={styles.photoButton} onPress={() => { setImagePickerVisible(false); pickFromCamera(); }}>
+                            <TouchableOpacity style={styles.photoButton} onPress={handleCameraPress}>
                                 <MaterialIcons name="photo-camera" size={36} color="#fff" />
                                 <Text style={styles.photoButtonText}>Camera</Text>
                             </TouchableOpacity>
-                            <TouchableOpacity style={styles.photoButton} onPress={() => { setImagePickerVisible(false); pickFromGallery(); }}>
+                            <TouchableOpacity style={styles.photoButton} onPress={handleGalleryPress}>
                                 <MaterialIcons name="photo-library" size={36} color="#fff" />
                                 <Text style={styles.photoButtonText}>Gallery</Text>
                             </TouchableOpacity>
                         </View>
-                        <TouchableOpacity onPress={() => setImagePickerVisible(false)} style={{ marginTop: 12 }}>
+                        <TouchableOpacity onPress={handleCancelPress} style={{ marginTop: 12 }}>
                             <Text style={{ fontSize: 16, color: '#e74c3c' }}>Cancel</Text>
                         </TouchableOpacity>
                     </View>
@@ -154,9 +193,9 @@ const Profile = () => {
                     visible={webcamVisible}
                     transparent
                     animationType="fade"
-                    onRequestClose={() => setWebcamVisible(false)}
+                    onRequestClose={handleWebcamClose}
                 >
-                    <Pressable style={{ flex: 1, backgroundColor: 'rgba(0,0,0,0.3)' }} onPress={() => setWebcamVisible(false)}>
+                    <Pressable style={{ flex: 1, backgroundColor: 'rgba(0,0,0,0.3)' }} onPress={handleWebcamClose}>
                         <View style={{ position: 'absolute', top: '30%', left: '10%', right: '10%', backgroundColor: '#fff', borderRadius: 10, padding: 24, alignItems: 'center' }}>
                             <Text style={{ fontSize: 18, fontWeight: 'bold', marginBottom: 16 }}>Webcam Capture</Text>
                             <Webcam
@@ -167,10 +206,10 @@ const Profile = () => {
                                 height={180}
                                 style={{ borderRadius: 8, marginBottom: 16 }}
                             />
-                            <TouchableOpacity style={{ marginBottom: 8 }} onPress={handleWebcamCapture}>
+                            <TouchableOpacity style={{ marginBottom: 8 }} onPress={handleCapturePress}>
                                 <Text style={{ fontSize: 16, color: '#1565c0' }}>Capture</Text>
                             </TouchableOpacity>
-                            <TouchableOpacity onPress={() => setWebcamVisible(false)}>
+                            <TouchableOpacity onPress={handleWebcamCancelPress}>
                                 <Text style={{ fontSize: 16, color: '#e74c3c' }}>Cancel</Text>
                             </TouchableOpacity>
                         </View>
@@ -183,7 +222,7 @@ const Profile = () => {
                         style={styles.input}
                         value={profile.name}
                         placeholder="Name"
-                        onChangeText={(text) => setProfile((prev) => ({ ...prev, name: text }))}
+                        onChangeText={handleNameChange}
                     />
                     <TextInput
                         style={styles.input}
@@ -193,27 +232,27 @@ const Profile = () => {
                     />
                     <TextInput
                         style={styles.input}
-                        value={profile.phone}
+                        value={profile.phone || ''}
                         placeholder="Phone"
-                        onChangeText={(text) => setProfile((prev) => ({ ...prev, phone: text }))}
+                        onChangeText={handlePhoneChange}
                     />
                     <TextInput
                         style={styles.input}
-                        value={profile.address}
+                        value={profile.address || ''}
                         placeholder="Address"
-                        onChangeText={(text) => setProfile((prev) => ({ ...prev, address: text }))}
+                        onChangeText={handleAddressChange}
                     />
-                    <TouchableOpacity style={styles.saveButton} onPress={handleSave}>
-                        <Text style={styles.saveText}>Save</Text>
+                    <TouchableOpacity style={styles.saveButton} onPress={handleSave} disabled={loading}>
+                        <Text style={styles.saveText}>{loading ? 'Saving...' : 'Save'}</Text>
                     </TouchableOpacity>
                 </>
             ) : (
                 <>
-                    <Text style={styles.name}>{profile.name}</Text>
-                    <Text style={styles.email}>{profile.email}</Text>
-                    {profile.phone ? <Text style={styles.detail}>Phone: {profile.phone}</Text> : null}
-                    {profile.address ? <Text style={styles.detail}>Address: {profile.address}</Text> : null}
-                    <TouchableOpacity style={styles.editButton} onPress={() => setEditing(true)}>
+                    <Text style={styles.name}>{currentUser.name}</Text>
+                    <Text style={styles.email}>{currentUser.email}</Text>
+                    {currentUser.phone ? <Text style={styles.detail}>Phone: {currentUser.phone}</Text> : null}
+                    {currentUser.address ? <Text style={styles.detail}>Address: {currentUser.address}</Text> : null}
+                    <TouchableOpacity style={styles.editButton} onPress={handleEditPress}>
                         <Text style={styles.editText}>Edit Profile</Text>
                     </TouchableOpacity>
                 </>
@@ -221,31 +260,9 @@ const Profile = () => {
             <TouchableOpacity style={styles.logoutButton} onPress={handleLogout}>
                 <Text style={styles.logoutText}>Logout</Text>
             </TouchableOpacity>
-            {Platform.OS === 'web' && (
-                <input
-                    id="webcamInput"
-                    type="file"
-                    accept="image/*"
-                    capture="environment"
-                    style={{ display: 'none' }}
-                    onChange={async (e) => {
-                        const file = e.target?.files?.[0];
-                        if (file) {
-                            const reader = new FileReader();
-                            reader.onloadend = () => {
-                                setProfile((prev) => ({
-                                    ...prev,
-                                    avatar: reader.result as string,
-                                }));
-                            };
-                            reader.readAsDataURL(file);
-                        }
-                    }}
-                />
-            )}
         </ScrollView>
     );
-};
+});
 
 const styles = StyleSheet.create({
     container: {

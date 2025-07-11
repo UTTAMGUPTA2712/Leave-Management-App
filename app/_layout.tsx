@@ -1,23 +1,16 @@
 // app/_layout.tsx
 import { Link, Redirect, Stack, useRouter, useSegments } from 'expo-router';
-import { useEffect, useState } from 'react';
+import { useCallback, useEffect, useMemo, useState } from 'react';
 import { ActivityIndicator, Text, View } from 'react-native';
 import { Provider as PaperProvider } from 'react-native-paper';
 import CustomAlert from '../components/CustomAlert';
 import UserMenu from '../components/UserMenu';
+import { signout } from '../features/session/session.slice';
+import { useAppDispatch, useCurrentUser, useIsAuthenticated, useSessionState } from '../store/hooks';
+import { StoreProvider } from '../store/store-provider';
 import { setCustomAlertStateSetter } from '../utils/alertHelper';
-import { STORAGE_KEYS } from '../utils/storageKeys';
-import { useAsyncStorage } from '../utils/useAsyncStorage';
 
-// Define a type for the user
-interface SessionUser {
-  name?: string;
-  [key: string]: any;
-}
-
-export default function RootLayout() {
-  const [user, setUser] = useState<SessionUser | null>(null);
-  const [loading, setLoading] = useState(true);
+function AppContent() {
   const [alertState, setAlertState] = useState({
     visible: false,
     title: '',
@@ -29,7 +22,10 @@ export default function RootLayout() {
   const segments = useSegments();
   const router = useRouter();
 
-  const sessionStorage = useAsyncStorage<any>(STORAGE_KEYS.SESSION);
+  const sessionState = useSessionState();
+  const isAuthenticated = useIsAuthenticated();
+  const currentUser = useCurrentUser();
+  const dispatch = useAppDispatch();
 
   useEffect(() => {
     setCustomAlertStateSetter(
@@ -46,35 +42,40 @@ export default function RootLayout() {
     );
   }, []);
 
-  useEffect(() => {
-    const checkUser = async () => {
-      try {
-        const sessionData = await sessionStorage.getData();
-        if (sessionData) {
-          setUser(sessionData);
-        } else {
-          setUser(null);
-        }
-      } catch (e) {
-        setUser(null);
-      }
-      setLoading(false);
-    };
-    checkUser();
-  }, []);
+  const allowedAuthRoutes = useMemo(() => ['dashboard', 'profile'], []);
+  const allowedUnauthRoutes = useMemo(() => ['login', 'signup'], []);
+  const currentPath = useMemo(() => segments[segments.length - 1] || '', [segments]);
 
-  const allowedAuthRoutes = ['dashboard', 'profile'];
-  const allowedUnauthRoutes = ['login', 'signup'];
-  const currentPath = segments[segments.length - 1] || '';
+  const handleLogout = useCallback(async () => {
+    dispatch(signout());
+    router.replace('/login');
+  }, [dispatch, router]);
 
-  if (loading) return (
+  const handleProfile = useCallback(() => {
+    router.push('/profile');
+  }, [router]);
+
+  const headerTitle = useCallback(() => (
+    <Link href="/dashboard" style={{ fontSize: 20, fontWeight: 'bold' }}>Leave Management</Link>
+  ), []);
+
+  const headerRight = useCallback(() => (
+    <UserMenu
+      userName={currentUser!.name!}
+      userAvatar={currentUser!.avatar}
+      onProfile={handleProfile}
+      onLogout={handleLogout}
+    />
+  ), [currentUser, handleProfile, handleLogout]);
+
+  if (sessionState === undefined) return (
     <View style={{ flex: 1, justifyContent: 'center', alignItems: 'center', backgroundColor: '#fff' }}>
       <ActivityIndicator size="large" color="#0000ff" />
       <Text style={{ marginTop: 10 }}>Loading...</Text>
     </View>
   );
 
-  if (!user) {
+  if (!isAuthenticated) {
     if (allowedUnauthRoutes.includes(currentPath)) {
       return (
         <>
@@ -98,19 +99,8 @@ export default function RootLayout() {
     return (
       <PaperProvider>
         <Stack screenOptions={{
-          headerTitle: () => <Link href="/dashboard" style={{ fontSize: 20, fontWeight: 'bold' }}>Leave Management</Link>,
-          headerRight: () => (
-            <UserMenu
-              userName={user.name!}
-              userAvatar={user.avatar}
-              onProfile={() => router.push('/profile')}
-              onLogout={async () => {
-                await sessionStorage.deleteData();
-                setUser(null);
-                router.replace('/login');
-              }}
-            />
-          ),
+          headerTitle,
+          headerRight,
         }} />
         <CustomAlert
           visible={alertState.visible}
@@ -123,4 +113,12 @@ export default function RootLayout() {
       </PaperProvider>
     );
   }
+}
+
+export default function RootLayout() {
+  return (
+    <StoreProvider>
+      <AppContent />
+    </StoreProvider>
+  );
 }
