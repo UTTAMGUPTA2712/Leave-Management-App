@@ -1,5 +1,6 @@
 import DateTimePicker from '@react-native-community/datetimepicker';
-import React, { useCallback, useState } from 'react';
+import * as Notifications from 'expo-notifications';
+import React, { useCallback, useEffect, useState } from 'react';
 import { Button, Modal, Platform, ScrollView, StyleSheet, Text, TextInput, TouchableOpacity, View } from 'react-native';
 import { resetLeaveSummary } from '../features/leaveSummary/leaveSummary.slice';
 import { addRecentRequest, resetRecentRequests, updateRecentRequest } from '../features/recentRequests/recentRequests.slice';
@@ -72,8 +73,59 @@ const Dashboard: React.FC = React.memo(() => {
         closeModal();
     };
 
-    const handleApprove = (req: any) => {
+    // Set notification handler for foreground notifications
+    Notifications.setNotificationHandler({
+        handleNotification: async () => ({
+            shouldShowAlert: true,
+            shouldPlaySound: false,
+            shouldSetBadge: false,
+            shouldShowBanner: true,
+            shouldShowList: true,
+        }),
+    });
+
+    // Request notification permissions on mount
+    useEffect(() => {
+        if (Platform.OS !== 'web') {
+            Notifications.requestPermissionsAsync();
+        }
+    }, []);
+
+    const handleApprove = async (req: any) => {
         dispatch(updateRecentRequest({ ...req, status: 'Approved' }));
+
+        if (Platform.OS === 'web') {
+            // Web: Use browser Notification API
+            if ('Notification' in window) {
+                if (Notification.permission === 'granted') {
+                    new Notification('Leave Approved', {
+                        body: `Leave for ${req.type} on ${req.date} has been approved.`,
+                    });
+                } else if (Notification.permission !== 'denied') {
+                    Notification.requestPermission().then(permission => {
+                        if (permission === 'granted') {
+                            new Notification('Leave Approved', {
+                                body: `Leave for ${req.type} on ${req.date} has been approved.`,
+                            });
+                        }
+                    });
+                }
+            }
+        } else {
+            // Native: Use expo-notifications
+            const { status } = await Notifications.getPermissionsAsync();
+            if (status !== 'granted') {
+                console.warn('Notification permission not granted.');
+                return;
+            }
+            Notifications.scheduleNotificationAsync({
+                content: {
+                    title: 'Leave Approved',
+                    body: `Leave for ${req.type} on ${req.date} has been approved.`,
+                },
+                trigger: null,
+            });
+        }
     };
 
     // Example: Delete all data
