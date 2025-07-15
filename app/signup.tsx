@@ -1,4 +1,4 @@
-import { useRouter } from 'expo-router';
+import { router, } from 'expo-router';
 import React, { useState } from 'react';
 import { StyleSheet, Text, TextInput, TouchableOpacity, View } from 'react-native';
 import { signin } from '../features/session/session.slice';
@@ -10,7 +10,6 @@ export default function SignupScreen() {
     const [name, setName] = useState('');
     const [email, setEmail] = useState('');
     const [password, setPassword] = useState('');
-    const router = useRouter();
 
     const dispatch = useAppDispatch();
     const users = useAppSelector(state => state.users);

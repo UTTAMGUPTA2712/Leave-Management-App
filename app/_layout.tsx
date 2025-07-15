@@ -1,5 +1,5 @@
 // app/_layout.tsx
-import { Link, Redirect, Stack, useRouter, useSegments } from 'expo-router';
+import { Link, Redirect, Stack, router, useSegments } from 'expo-router';
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import { ActivityIndicator, Text, View } from 'react-native';
 import { Provider as PaperProvider } from 'react-native-paper';
@@ -20,7 +20,6 @@ function AppContent() {
     showCancel: false,
   });
   const segments = useSegments();
-  const router = useRouter();
 
   const sessionState = useSessionState();
   const isAuthenticated = useIsAuthenticated();
@@ -52,7 +51,7 @@ function AppContent() {
   }, [dispatch, router]);
 
   const handleProfile = useCallback(() => {
-    router.push('/profile');
+    router.replace('/profile');
   }, [router]);
 
   const headerTitle = useCallback(() => (

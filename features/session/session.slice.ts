@@ -2,6 +2,11 @@ import { createSlice, PayloadAction } from '@reduxjs/toolkit';
 import { User } from '../users/users.slice';
 
 interface SessionState {
+    email: string;
+    avatar: string | null | undefined;
+    name: string | undefined;
+    phone: string;
+    address: string;
     user: User | null;
     isAuthenticated: boolean;
 }

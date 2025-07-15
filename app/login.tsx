@@ -1,4 +1,4 @@
-import { useRouter } from 'expo-router';
+import { router } from 'expo-router';
 import { useState } from 'react';
 import { Image, StyleSheet, Text, TextInput, TouchableOpacity, View } from 'react-native';
 import { signin } from '../features/session/session.slice';
@@ -8,7 +8,6 @@ import { showAlert } from '../utils/alertHelper';
 export default function LoginScreen() {
     const [email, setEmail] = useState('');
     const [password, setPassword] = useState('');
-    const router = useRouter();
 
     const dispatch = useAppDispatch();
     const users = useAppSelector(state => state.users);
@@ -60,7 +59,7 @@ export default function LoginScreen() {
             <TouchableOpacity style={styles.button} onPress={handleLogin}>
                 <Text style={styles.buttonText}>Sign In</Text>
             </TouchableOpacity>
-            <TouchableOpacity onPress={() => router.push('/signup')}>
+            <TouchableOpacity onPress={() => router.replace('/signup')}>
                 <Text style={styles.linkText}>Don't have an account? <Text style={styles.linkHighlight}>Sign up</Text></Text>
             </TouchableOpacity>
         </View>
