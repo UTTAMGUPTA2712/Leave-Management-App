@@ -14,6 +14,11 @@ interface SessionState {
 const initialState: SessionState = {
     user: null,
     isAuthenticated: false,
+    email: '',
+    avatar: undefined,
+    name: undefined,
+    phone: '',
+    address: ''
 };
 
 const sessionSlice = createSlice({

@@ -22,8 +22,14 @@ const recentRequestsSlice = createSlice({
         resetRecentRequests() {
             return [];
         },
+        updateRecentRequest(state, action: PayloadAction<RecentRequest>) {
+            const idx = state.findIndex(req => req.id === action.payload.id);
+            if (idx !== -1) {
+                state[idx] = action.payload;
+            }
+        },
     },
 });
 
-export const { setRecentRequests, addRecentRequest, resetRecentRequests } = recentRequestsSlice.actions;
+export const { setRecentRequests, addRecentRequest, resetRecentRequests, updateRecentRequest } = recentRequestsSlice.actions;
 export default recentRequestsSlice.reducer; 
